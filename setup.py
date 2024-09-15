@@ -1,5 +1,4 @@
-from setuptools import setup
-import os
+from setuptools import setup, find_packages
 
 setup(
     name='acoupipe',
@@ -25,7 +24,7 @@ setup(
         'Source': 'https://github.com/adku1173/acoupipe',
         'Tracker': 'https://github.com/adku1173/acoupipe/issues'
     },
-    packages=['acoupipe'],
+    packages=find_packages(),
     # install_requires=[
     #     'acoular>=24.03',
     #     'ray',
