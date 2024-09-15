@@ -22,4 +22,5 @@ __pycache__/
 */__pycache__/*
 tests/throughput/results/*.png
 .venv/*
+.venv*
 *.sif
