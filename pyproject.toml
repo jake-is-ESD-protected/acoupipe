@@ -8,7 +8,7 @@ version = "24.04" # Date based release versioning
 description = "Library for the generation of large-scale microphone array data for machine learning"
 readme = "README.rst"
 license = {file = "LICENSE.txt"}
-requires-python = ">=3.8,<=11"
+# requires-python = ">=3.8,<=11"
 authors = [
     {name = "Acoular Development Team", email = "info@acoular.org"},
 ]
