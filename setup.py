@@ -26,12 +26,12 @@ setup(
         'Tracker': 'https://github.com/adku1173/acoupipe/issues'
     },
     packages=['acoupipe'],
-    install_requires=[
-        'acoular>=24.03',
-        'ray',
-        'h5py',
-        'tqdm',
-        'parameterized',
-        'pooch'
-    ]
+    # install_requires=[
+    #     'acoular>=24.03',
+    #     'ray',
+    #     'h5py',
+    #     'tqdm',
+    #     'parameterized',
+    #     'pooch'
+    # ]
 )
