@@ -306,7 +306,7 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
                 scenario=self.scenario,
                 dataset_split=self.dataset_split,
                 cache_dir=self.srir_dir,
-                output_format='hdf5',
+                output_format='raw',
             )
         )
 
@@ -362,12 +362,12 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
 
     def create_mics(self):
         with h5.File(self.filename, 'r') as file:
-            pos_total = file['data/location/receiver'][()].T
+            pos_total = self._read_receiver_positions(file)
         return ac.MicGeom(pos_total=pos_total)
 
     def create_env(self):
         with h5.File(self.filename, 'r') as file:
-            c = np.mean(file['metadata/c0'][()])
+            c = np.mean(self._read_speed_of_sound(file))
         return ac.Environment(c=c)
 
     def create_sources(self):
@@ -390,7 +390,7 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
                 mics=self.mics,
                 grid=self.grid,
                 env=self.env,
-                ref=file['data/location/receiver'][self.ref_mic_index],
+                ref=self._read_receiver_positions(file)[:, self.ref_mic_index],
             )
 
     def create_grid(self):
@@ -403,6 +403,29 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
         with h5.File(self.filename, 'r') as file:
             gpos_file = file['data/location/source'][()].T
         return ac.ImportGrid(pos=gpos_file)
+
+    @staticmethod
+    def _read_receiver_positions(file):
+        receiver = np.asarray(file['data/location/receiver'][()])
+        if receiver.ndim == 3 and receiver.shape[-1] == 1:
+            receiver = receiver[..., 0]
+        return receiver.T
+
+    @staticmethod
+    def _read_speed_of_sound(file):
+        if 'metadata/c0' in file:
+            return file['metadata/c0'][()]
+        if 'SpeedOfSound' in file:
+            return file['SpeedOfSound'][()]
+        msg = "Could not find speed of sound in 'metadata/c0' or 'SpeedOfSound'."
+        raise KeyError(msg)
+
+    @staticmethod
+    def _read_impulse_response(file, index):
+        ir = np.asarray(file['data/impulse_response'][index])
+        if ir.ndim == 3 and ir.shape[-1] == 1:
+            ir = ir[..., 0]
+        return ir
 
     @staticmethod
     def _prepare_ir(sampler, mics, freq_data, filename, loc, ref_mic, domain='frequency'):
@@ -423,7 +446,7 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
                 distances = np.linalg.norm(loc_array - loc[:, i][:, np.newaxis], axis=0)
                 ir_idx = np.argmin(distances)
                 assert distances[ir_idx] < 1e-6  # Ensure it's a close match
-                ir = file['data/impulse_response'][ir_idx]
+                ir = DatasetMIRACLEConfig._read_impulse_response(file, ir_idx)
                 irs.append(ir)
                 h_norm[i] = np.sum(ir[ref_mic] ** 2)
                 if domain == 'frequency':
@@ -579,19 +602,32 @@ class DatasetSRIRACHA(DatasetMIRACLE):
             )
         super().__init__(tasks=tasks, config=config)
 
-    def set_filename(self):
-        """Resolve the SRIR file path, downloading via :mod:`irdl` if necessary."""
-        self._filename = str(
-            SrirachaDataset.get(
-                scenario=self.scenario,
-                dataset_split=self.dataset_split,
-                cache_dir=self.srir_dir,
-                output_format='hdf5',
-            )
-        )
-
 
 class DatasetSRIRACHAConfig(DatasetMIRACLEConfig):
     """Configuration class for the DatasetSRIRACHA dataset."""
 
     scenario = Either(*SRIRACHA_SCENARIOS, desc='experimental configuration')
+
+    def set_filename(self):
+        """Resolve the SRIR file path, downloading via :mod:`irdl` if necessary."""
+        scenario, dataset_split = self._split_sriracha_scenario(self.scenario, self.dataset_split)
+        output_format = 'raw' if dataset_split or scenario.endswith('-D') else 'hdf5'
+        self._filename = str(
+            SrirachaDataset.get(
+                scenario=scenario,
+                dataset_split=dataset_split,
+                cache_dir=self.srir_dir,
+                output_format=output_format,
+            )
+        )
+
+    @staticmethod
+    def _split_sriracha_scenario(scenario, dataset_split):
+        for split in ('C1', 'C2', 'C3', 'C4'):
+            suffix = f'-{split}'
+            if scenario.endswith(suffix):
+                if dataset_split is not None and dataset_split != split:
+                    msg = f'Conflicting SRIRACHA splits: scenario implies {split}, dataset_split is {dataset_split}.'
+                    raise ValueError(msg)
+                return scenario[: -len(suffix)], split
+        return scenario, dataset_split
