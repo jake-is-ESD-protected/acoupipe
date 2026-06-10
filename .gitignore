@@ -23,3 +23,5 @@ __pycache__/
 tests/throughput/results/*.png
 .venv/*
 *.sif
+llm_docs
+llm_context
