@@ -1,16 +1,16 @@
-"""BasePipeline and Distributed Pipeline for testing."""
+"""DistributedPipeline helpers for multiprocessing tests."""
 
 from acoular import MicGeom, PointSource, SourceMixer, WNoiseGenerator
 from numpy import array
 from numpy.random import RandomState
 from scipy.stats import norm, rayleigh
 
-from acoupipe.pipeline import BasePipeline
+from acoupipe.pipeline import DistributedPipeline
 from acoupipe.sampler import MicGeomSampler, NumericAttributeSampler, PointSourceSampler, SourceSetSampler
 from tests.constants import POS_TOTAL
 
 
-def get_pipeline(nsamples):
+def get_distributed_pipeline(nsamples=100, num_workers=1):
     mg = MicGeom(pos_total=POS_TOTAL)
     wn_list = []
     ps_list = []
@@ -22,11 +22,9 @@ def get_pipeline(nsamples):
     nas = NumericAttributeSampler(
         random_var=rayleigh(scale=5.0), target=wn_list, attribute='rms', random_state=RandomState(1)
     )
-
     mgs = MicGeomSampler(
         random_var=norm(loc=0, scale=0.004), ddir=array([[1.0], [0.5], [0]]), random_state=RandomState(2), target=mg
     )
-
     pss = PointSourceSampler(
         random_var=norm(loc=0, scale=0.1688),
         target=ps_list,
@@ -35,10 +33,11 @@ def get_pipeline(nsamples):
         y_bounds=(-0.5, 0.5),
         random_state=RandomState(3),
     )
-
     sms = SourceSetSampler(replace=False, target=[sm], set=ps_list, random_state=RandomState(4))
-
-    pipeline = BasePipeline(
-        sampler={1: nas, 2: mgs, 3: pss, 4: sms}, numsamples=nsamples, features=lambda sampler: {'data': True}
+    pipeline = DistributedPipeline(
+        sampler={1: nas, 2: mgs, 3: pss, 4: sms},
+        numsamples=nsamples,
+        numworkers=num_workers,
+        features=lambda sampler: {'data': True},
     )
     return pipeline
