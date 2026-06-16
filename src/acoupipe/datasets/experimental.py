@@ -29,6 +29,34 @@ from acoupipe.datasets.utils import (
     calc_transfer,
 )
 
+_MIRACLE_SCENARIOS = ['A1', 'D1', 'A2', 'R2']
+_SRIRACHA_SCENARIOS = [
+    'SR1',
+    'SR1-C1',
+    'SR1-C2',
+    'SR1-C3',
+    'SR1-C4',
+    'SR1-D',
+    'SR2',
+    'SR2-C1',
+    'SR2-C2',
+    'SR2-C3',
+    'SR2-C4',
+    'SR2-D',
+    'SRA1',
+    'SRA1-C1',
+    'SRA1-C2',
+    'SRA1-C3',
+    'SRA1-C4',
+    'SRA1-D',
+    'SRA2',
+    'SRA2-C1',
+    'SRA2-C2',
+    'SRA2-C3',
+    'SRA2-C4',
+    'SRA2-D',
+]
+
 
 class DatasetMIRACLE(DatasetBase):
     r"""A microphone array dataset generator using experimentally measured data.
@@ -209,7 +237,7 @@ class DatasetMIRACLE(DatasetBase):
             sets the path to the `irdl` cache directory (overridable via the ``IRDL_DATA_DIR`` environment
            variable). The SRIR files are downloaded from the `MIRACLE`_ dataset if not already present.
         scenario : str, optional
-            Scenario of the dataset. Possible values are "A1", "D1", "A2", "R2".
+            Scenario of the dataset. One of 'A1', 'A2', 'D1', 'R2'.
         dataset_split : str or None, optional
             Artificial dataset split. One of "C1", "C2", "C3", "C4", or None (full dataset).
             Not allowed in combination with scenario "D1". Default is None.
@@ -250,40 +278,11 @@ class DatasetMIRACLE(DatasetBase):
         super().__init__(tasks=tasks, remote_args=remote_args, config=config)
 
 
-MIRACLE_SCENARIOS = ['A1', 'D1', 'A2', 'R2']
-SRIRACHA_SCENARIOS = [
-    'SR1',
-    'SR1-C1',
-    'SR1-C2',
-    'SR1-C3',
-    'SR1-C4',
-    'SR1-D',
-    'SR2',
-    'SR2-C1',
-    'SR2-C2',
-    'SR2-C3',
-    'SR2-C4',
-    'SR2-D',
-    'SRA1',
-    'SRA1-C1',
-    'SRA1-C2',
-    'SRA1-C3',
-    'SRA1-C4',
-    'SRA1-D',
-    'SRA2',
-    'SRA2-C1',
-    'SRA2-C2',
-    'SRA2-C3',
-    'SRA2-C4',
-    'SRA2-D',
-]
-
-
 class DatasetMIRACLEConfig(DatasetSyntheticConfig):
     """Configuration class for the DatasetMIRACLE dataset."""
 
     srir_dir = Either(Instance(Path), Str, None)
-    scenario = Either(MIRACLE_SCENARIOS, default='A1', desc='experimental configuration')
+    scenario = Either(_MIRACLE_SCENARIOS, default='A1', desc='experimental configuration')
     dataset_split = Either(None, 'C1', 'C2', 'C3', 'C4', default=None, desc='artificial dataset split')
     filename = Property()
     _filename = Str
@@ -301,12 +300,14 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
 
     def set_filename(self):
         """Resolve the SRIR file path, downloading via :mod:`irdl` if necessary."""
+        output_format = 'hdf5' if self.dataset_split else 'raw'
+
         self._filename = str(
             MiracleDataset.get(
                 scenario=self.scenario,
                 dataset_split=self.dataset_split,
                 cache_dir=self.srir_dir,
-                output_format='raw',
+                output_format=output_format,
             )
         )
 
@@ -415,9 +416,7 @@ class DatasetMIRACLEConfig(DatasetSyntheticConfig):
     def _read_speed_of_sound(file):
         if 'metadata/c0' in file:
             return file['metadata/c0'][()]
-        if 'SpeedOfSound' in file:
-            return file['SpeedOfSound'][()]
-        msg = "Could not find speed of sound in 'metadata/c0' or 'SpeedOfSound'."
+        msg = "Could not find speed of sound in 'metadata/c0'."
         raise KeyError(msg)
 
     @staticmethod
@@ -544,8 +543,9 @@ class DatasetSRIRACHA(DatasetMIRACLE):
 
     def __init__(
         self,
-        scenario,
         srir_dir=None,
+        scenario='SR1-D',
+        dataset_split=None,
         ref_mic_index=63,
         mode='welch',
         mic_sig_noise=True,
@@ -568,7 +568,8 @@ class DatasetSRIRACHA(DatasetMIRACLE):
             sets the path to the `pooch.os_cache` directory. The SRIR files are downloaded from the
             `MIRACLE`_ dataset if they are not found in the directory.
         scenario : str, optional
-            Scenario of the dataset. Possible values are "A1", "D1", "A2", "R2".
+            Scenario of the dataset. One of 'SR1', 'SRA1', 'SR1-D', 'SRA1-D',
+            'SR2', 'SRA2', 'SR2-D', 'SRA2-D'. Default is 'SR1-D'.
         ref_mic_index : int, optional
             Index of the microphone that is used as reference observation point.
             Default is 63, which is the index of the centermost microphone.
@@ -597,6 +598,7 @@ class DatasetSRIRACHA(DatasetMIRACLE):
                 max_nsources=max_nsources,
                 srir_dir=srir_dir,
                 scenario=scenario,
+                dataset_split=dataset_split,
                 ref_mic_index=ref_mic_index,
                 mic_sig_noise=mic_sig_noise,
             )
@@ -606,28 +608,18 @@ class DatasetSRIRACHA(DatasetMIRACLE):
 class DatasetSRIRACHAConfig(DatasetMIRACLEConfig):
     """Configuration class for the DatasetSRIRACHA dataset."""
 
-    scenario = Either(*SRIRACHA_SCENARIOS, desc='experimental configuration')
+    scenario = Either(_SRIRACHA_SCENARIOS, default='SR1-D', desc='experimental configuration')
+    dataset_split = Either(None, 'C1', 'C2', 'C3', 'C4', default=None, desc='artificial dataset split')
 
     def set_filename(self):
         """Resolve the SRIR file path, downloading via :mod:`irdl` if necessary."""
-        scenario, dataset_split = self._split_sriracha_scenario(self.scenario, self.dataset_split)
-        output_format = 'raw' if dataset_split or scenario.endswith('-D') else 'hdf5'
+        output_format = 'raw' if self.dataset_split is not None or self.scenario.endswith('D') else 'hdf5'
+
         self._filename = str(
             SrirachaDataset.get(
-                scenario=scenario,
-                dataset_split=dataset_split,
+                scenario=self.scenario,
+                dataset_split=self.dataset_split,
                 cache_dir=self.srir_dir,
                 output_format=output_format,
             )
         )
-
-    @staticmethod
-    def _split_sriracha_scenario(scenario, dataset_split):
-        for split in ('C1', 'C2', 'C3', 'C4'):
-            suffix = f'-{split}'
-            if scenario.endswith(suffix):
-                if dataset_split is not None and dataset_split != split:
-                    msg = f'Conflicting SRIRACHA splits: scenario implies {split}, dataset_split is {dataset_split}.'
-                    raise ValueError(msg)
-                return scenario[: -len(suffix)], split
-        return scenario, dataset_split
